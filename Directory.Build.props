@@ -1,0 +1,20 @@
+<Project>
+
+    <PropertyGroup>
+        <LangVersion>14</LangVersion>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+        <Authors>Sébastien de Salvador</Authors>
+        <Copyright>Copyright Sébastien de Salvador</Copyright>
+        <PackageLicenseExpression>MIT</PackageLicenseExpression>
+        <PackageTags>logging;source-generator;aop;ilogger;microsoft-extensions-logging;diagnostics</PackageTags>
+        <PackageProjectUrl>https://github.com/sebdesalvador/Log0</PackageProjectUrl>
+        <RepositoryUrl>https://github.com/sebdesalvador/Log0</RepositoryUrl>
+        <PublishRepositoryUrl>true</PublishRepositoryUrl>
+        <EmbedUntrackedSources>true</EmbedUntrackedSources>
+        <Deterministic>true</Deterministic>
+        <ContinuousIntegrationBuild Condition="'$(GITHUB_ACTIONS)' == 'true'">true</ContinuousIntegrationBuild>
+    </PropertyGroup>
+
+</Project>

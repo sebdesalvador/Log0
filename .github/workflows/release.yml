@@ -1,0 +1,99 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
+
+name: release
+on:
+  workflow_dispatch: # Allow running the workflow manually from the GitHub UI
+  push:
+    branches:
+      - 'main'       # Run the workflow when pushing to the main branch
+  pull_request:
+    branches:
+      - '*'          # Run the workflow for all pull requests
+  release:
+    types:
+      - published    # Run the workflow when a new GitHub release is published
+
+env:
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
+  DOTNET_NOLOGO: true
+  NuGetDirectory: ${{ github.workspace }}/nuget
+
+defaults:
+  run:
+    shell: pwsh
+
+jobs:
+  create_nuget:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0 # Get all history to allow automatic versioning using MinVer
+
+    # Install the .NET SDK indicated in the global.json file
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        global-json-file: global.json
+
+    # Packing Log0 builds the source generator and embeds it as an analyzer
+    - run: dotnet pack src/Log0/Log0.csproj --configuration Release --output ${{ env.NuGetDirectory }}
+
+    # Publish the NuGet package as an artifact, so it can be used in the following jobs
+    - uses: actions/upload-artifact@v4
+      with:
+        name: nuget
+        if-no-files-found: error
+        retention-days: 7
+        path: |
+          ${{ env.NuGetDirectory }}/*.nupkg
+          ${{ env.NuGetDirectory }}/*.snupkg
+
+  run_test:
+    runs-on: ubuntu-latest
+    steps:
+        - uses: actions/checkout@v4
+        - name: Setup .NET
+          uses: actions/setup-dotnet@v4
+          with:
+            global-json-file: global.json
+        - name: Run tests
+          run: dotnet test Log0.slnx --configuration Release
+        - name: Run the sample
+          run: dotnet run --project samples/Log0.Sample --configuration Release -- --debug
+
+  deploy:
+    # Publish only when creating a GitHub Release
+    # https://docs.github.com/en/repositories/releasing-projects-on-github/managing-releases-in-a-repository
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    needs: [ create_nuget, run_test ]
+    # The trusted publishing policy on nuget.org requires this environment by name.
+    environment: nuget
+    permissions:
+      id-token: write # Lets NuGet/login exchange GitHub's OIDC token for a short-lived nuget.org API key
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: nuget
+          path: ${{ env.NuGetDirectory }}
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+
+      # Trusted publishing: no stored secret. The policy on nuget.org names this repo, release.yml
+      # and the nuget environment; any mismatch and the token exchange is refused.
+      - name: NuGet login
+        id: login
+        uses: NuGet/login@v1
+        with:
+          user: sebdesalvador
+
+      # --skip-duplicate lets a retried workflow skip a package that already made it.
+      # The symbol package next to the .nupkg is pushed automatically.
+      - name: Publish NuGet package
+        run: |
+          foreach($file in (Get-ChildItem "${{ env.NuGetDirectory }}" -Filter *.nupkg)) {
+              dotnet nuget push $file.FullName --api-key "${{ steps.login.outputs.NUGET_API_KEY }}" --source https://api.nuget.org/v3/index.json --skip-duplicate
+              if ($LASTEXITCODE -ne 0) { throw "Pushing $($file.Name) failed" }
+          }

@@ -1,0 +1,50 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <PackageId>Log0</PackageId>
+        <Description>Zero-boilerplate method logging. Mark a partial method with [Log] and a source generator writes the Start, Success, Canceled and Error logs around it, with parameter values at Debug level. No proxies, no reflection.</Description>
+        <TargetFrameworks>netstandard2.0;net8.0</TargetFrameworks>
+        <GenerateDocumentationFile>true</GenerateDocumentationFile>
+        <IncludeSymbols>true</IncludeSymbols>
+        <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+        <PackageReadmeFile>README.md</PackageReadmeFile>
+        <MinVerTagPrefix>v</MinVerTagPrefix>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.3" />
+        <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="8.0.1" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <!-- The generator travels with the package, so one PackageReference is all a consumer needs. -->
+        <ProjectReference Include="..\Log0.SourceGeneration\Log0.SourceGeneration.csproj"
+                          OutputItemType="Analyzer"
+                          ReferenceOutputAssembly="false"
+                          PrivateAssets="all" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <!-- Version comes from the latest v* git tag, so a GitHub release is the only place it is set. -->
+        <PackageReference Include="MinVer" Version="6.0.0" PrivateAssets="All" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+        <None Include="..\..\icon.png" Pack="true" PackagePath="\" Condition="Exists('..\..\icon.png')" />
+    </ItemGroup>
+
+    <!--
+      The generator ships inside this package as an analyzer asset, so a consumer needs one
+      PackageReference rather than two. Resolved at pack time, after the generator has been built.
+    -->
+    <Target Name="PackSourceGenerator" BeforeTargets="_GetPackageFiles" DependsOnTargets="Build">
+        <ItemGroup>
+            <None Include="..\Log0.SourceGeneration\bin\$(Configuration)\netstandard2.0\Log0.SourceGeneration.dll"
+                  Pack="true"
+                  PackagePath="analyzers/dotnet/cs"
+                  Visible="false" />
+        </ItemGroup>
+    </Target>
+
+</Project>

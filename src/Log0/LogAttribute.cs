@@ -1,0 +1,43 @@
+using Microsoft.Extensions.Logging;
+
+namespace Log0;
+
+/// <summary>
+/// Logs every call to a partial method: <c>Start</c> on entry, then <c>Success</c>, <c>Canceled</c>
+/// (warning) or <c>Error</c> (error, with the exception). Parameter values are added to the
+/// <c>Start</c> entry when <see cref="LogLevel.Debug"/> or lower is enabled.
+/// </summary>
+/// <remarks>
+/// Declare the method as a partial definition and write its body in a method with the same
+/// signature and a <c>Core</c> suffix; the generator connects the two:
+/// <code>
+/// [Log]
+/// public partial Task&lt;Order&gt; GetOrder( int id );
+///
+/// private async Task&lt;Order&gt; GetOrderCore( int id ) =&gt; await _repository.Find( id );
+/// </code>
+/// </remarks>
+[ AttributeUsage( AttributeTargets.Method, Inherited = false ) ]
+public sealed class LogAttribute : Attribute
+{
+    #region Properties
+
+    /// <summary>The level of the <c>Start</c> and <c>Success</c> entries.</summary>
+    public LogLevel Level { get; }
+
+    #endregion
+
+    #region Constructors
+
+    /// <summary>Logs at <see cref="LogLevel.Information"/>.</summary>
+    public LogAttribute() : this( LogLevel.Information ) { }
+
+    /// <summary>Logs <c>Start</c> and <c>Success</c> at <paramref name="level"/>.</summary>
+    /// <param name="level">
+    /// The level of the <c>Start</c> and <c>Success</c> entries. <c>Canceled</c> is always a
+    /// warning and <c>Error</c> always an error.
+    /// </param>
+    public LogAttribute( LogLevel level ) => Level = level;
+
+    #endregion
+}

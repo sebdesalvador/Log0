@@ -1,0 +1,13 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Log0/Log0.csproj" />
+    <Project Path="src/Log0.SourceGeneration/Log0.SourceGeneration.csproj" />
+  </Folder>
+  <Folder Name="/samples/">
+    <Project Path="samples/Log0.Sample/Log0.Sample.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Log0.Tests/Log0.Tests.csproj" />
+    <Project Path="tests/Log0.SourceGeneration.Tests/Log0.SourceGeneration.Tests.csproj" />
+  </Folder>
+</Solution>
