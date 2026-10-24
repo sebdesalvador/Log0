@@ -6,11 +6,12 @@ public sealed class DiagnosticTests
 {
     #region Public Methods
 
-    [ Theory ]
-    [ InlineData( "[Log] public int Add( int a ) => a;" ) ]
-    [ InlineData( "[Log] public partial int Add( int a ); public partial int Add( int a ) => a;" ) ]
-    public void LOG001_when_the_method_is_not_a_bodiless_partial( string member )
-        => AssertSingle( "LOG001", $"public partial class C {{ {member} private int AddCore( int a ) => a; }}" );
+    [ Fact ]
+    public void LOG001_when_a_partial_method_has_a_body()
+        => AssertSingle(
+            "LOG001",
+            "public partial class C { [Log] public partial int Add( int a ); public partial int Add( int a ) => a; private int AddCore( int a ) => a; }"
+        );
 
     [ Fact ]
     public void LOG002_when_there_is_no_Core_implementation()
@@ -36,6 +37,39 @@ public sealed class DiagnosticTests
         var diagnostic = AssertSingle( "LOG004", $"public partial class C {{ {members} }}" );
 
         Assert.Contains( reason, diagnostic.GetMessage() );
+    }
+
+    [ Theory ]
+    [ InlineData( "[Log] public ref int Get() => ref _x; private int _x;", "ref returns" ) ]
+    [ InlineData( "[Log] public IEnumerable<int> Get() { yield return 1; }", "iterators" ) ]
+    [ InlineData( "[Log] public async void Go() => await Task.Yield();", "async void" ) ]
+    public void LOG004_for_unsupported_plain_methods( string members, string reason )
+    {
+        var diagnostic = AssertSingle( "LOG004", $"public class C {{ {members} }}" );
+
+        Assert.Contains( reason, diagnostic.GetMessage() );
+    }
+
+    [ Theory ]
+    [ InlineData( "public class C { [Log] private void Go() { } }", "'Go' is not visible" ) ]
+    [ InlineData( "public class C { [Log] protected void Go() { } }", "'Go' is not visible" ) ]
+    [ InlineData( "public class C { private class Inner { [Log] public void Go() { } } }", "'Inner' is not visible" ) ]
+    [ InlineData( "public struct S { [Log] public void Go() { } }", "struct methods" ) ]
+    [ InlineData( "public interface I { [Log] static abstract void Go(); }", "static abstract" ) ]
+    public void LOG005_when_calls_cannot_be_intercepted( string source, string reason )
+    {
+        var diagnostic = AssertSingle( "LOG005", source );
+
+        Assert.Contains( reason, diagnostic.GetMessage() );
+    }
+
+    [ Fact ]
+    public void Plain_methods_need_no_partial_anywhere()
+    {
+        var run = GeneratorHarness.Run( Wrap( "public class Outer { public class C { [Log] public int Add( int a ) => a; } }" ) );
+
+        Assert.Empty( run.GeneratorDiagnostics );
+        Assert.Empty( run.CompilerDiagnostics );
     }
 
     [ Fact ]

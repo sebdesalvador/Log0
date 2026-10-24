@@ -3,13 +3,19 @@ using Microsoft.Extensions.Logging;
 namespace Log0;
 
 /// <summary>
-/// Logs every call to a partial method: <c>Start</c> on entry, then <c>Success</c>, <c>Canceled</c>
-/// (warning) or <c>Error</c> (error, with the exception). Parameter values are added to the
-/// <c>Start</c> entry when <see cref="LogLevel.Debug"/> or lower is enabled.
+/// Logs calls to a method: <c>Start</c> on entry, then <c>Success</c>, <c>Canceled</c> (warning)
+/// or <c>Error</c> (error, with the exception). Parameter values are added to the <c>Start</c>
+/// entry when <see cref="LogLevel.Debug"/> or lower is enabled.
 /// </summary>
 /// <remarks>
-/// Declare the method as a partial definition and write its body in a method with the same
-/// signature and a <c>Core</c> suffix; the generator connects the two:
+/// On a plain method, every direct call to it in the project is intercepted at compile time and
+/// logged; on an interface method, so is every call through the interface:
+/// <code>
+/// [Log]
+/// public Task&lt;Order&gt; GetOrder( int id ) =&gt; _repository.Find( id );
+/// </code>
+/// To log every call however it is made, declare the method as a partial definition and write
+/// its body in a method with the same signature and a <c>Core</c> suffix:
 /// <code>
 /// [Log]
 /// public partial Task&lt;Order&gt; GetOrder( int id );

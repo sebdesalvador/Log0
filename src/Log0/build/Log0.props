@@ -1,0 +1,12 @@
+<Project>
+
+    <!--
+      Plain [Log] methods are logged by interceptors, which the compiler only accepts from
+      namespaces listed here. Imported automatically from the package; the repo's own projects
+      import it by hand, since a ProjectReference doesn't.
+    -->
+    <PropertyGroup>
+        <InterceptorsNamespaces>$(InterceptorsNamespaces);Log0.Generated</InterceptorsNamespaces>
+    </PropertyGroup>
+
+</Project>

@@ -57,6 +57,9 @@ internal static class LogEmitter
         if ( type.Namespace is not null )
             writer.Close();
 
+        if ( methods.Any( m => m.Attributes.Length > 0 ) )
+            EmitInterceptsLocationAttribute( writer );
+
         return writer.ToString();
     }
 
@@ -88,6 +91,9 @@ internal static class LogEmitter
         writer.Line( $"private static readonly {METHOD} {field} = new( \"{method.DisplayName}\", (global::Microsoft.Extensions.Logging.LogLevel){method.Level}{parameterNames} );" );
         writer.Line();
 
+        foreach ( var attribute in method.Attributes )
+            writer.Line( attribute );
+
         writer.Line( GeneratedCode() );
         writer.Open( method.Signature );
 
@@ -114,6 +120,21 @@ internal static class LogEmitter
                 break;
         }
 
+        writer.Close();
+    }
+
+    /// <summary>
+    /// The compiler recognises the attribute by name, and doesn't ship it; a file-local copy
+    /// per generated file can't clash with anyone else's.
+    /// </summary>
+    private static void EmitInterceptsLocationAttribute( Writer writer )
+    {
+        writer.Line();
+        writer.Open( "namespace System.Runtime.CompilerServices" );
+        writer.Line( "[global::System.AttributeUsage( global::System.AttributeTargets.Method, AllowMultiple = true )]" );
+        writer.Open( "file sealed class InterceptsLocationAttribute : global::System.Attribute" );
+        writer.Line( "public InterceptsLocationAttribute( int version, string data ) { }" );
+        writer.Close();
         writer.Close();
     }
 

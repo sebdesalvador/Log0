@@ -25,7 +25,7 @@ internal static class MethodAnalyzer
     #region Fields
 
     /// <summary>Fully qualified, with nullable annotations, so generated code needs no usings.</summary>
-    private static readonly SymbolDisplayFormat _typeFormat = SymbolDisplayFormat.FullyQualifiedFormat.AddMiscellaneousOptions(
+    internal static readonly SymbolDisplayFormat TypeFormat = SymbolDisplayFormat.FullyQualifiedFormat.AddMiscellaneousOptions(
         SymbolDisplayMiscellaneousOptions.IncludeNullableReferenceTypeModifier
     );
 
@@ -42,7 +42,13 @@ internal static class MethodAnalyzer
         var isPartial = declaration.Modifiers.Any( SyntaxKind.PartialKeyword );
         var hasBody = declaration.Body is not null || declaration.ExpressionBody is not null;
 
-        if ( !isPartial || hasBody || method.PartialImplementationPart is not null )
+        // A plain method keeps its body; its calls are intercepted instead.
+        if ( !isPartial )
+            return CallAnalyzer.Check( method, cancellationToken ) is { } problem
+                ? Result.Failure( Diagnostic.Create( problem.Descriptor, location, problem.Arguments ) )
+                : Result.None;
+
+        if ( hasBody || method.PartialImplementationPart is not null )
             return Fail( Diagnostics.MustBePartialDefinition, location, method.Name );
 
         for ( var type = method.ContainingType; type is not null; type = type.ContainingType )
@@ -78,7 +84,8 @@ internal static class MethodAnalyzer
             ResultType: resultType,
             LoggerExpression: FindLogger( method ),
             Parameters: LoggedParameters( method ).ToArray(),
-            ReservedNames: method.Parameters.Select( p => p.Name ).Concat( method.TypeParameters.Select( p => p.Name ) ).ToArray()
+            ReservedNames: method.Parameters.Select( p => p.Name ).Concat( method.TypeParameters.Select( p => p.Name ) ).ToArray(),
+            Attributes: new string[ 0 ]
         );
 
         return Result.Success( model );
@@ -130,17 +137,17 @@ internal static class MethodAnalyzer
     /// Whether the body yields. Logging around an iterator would report <c>Success</c> before any
     /// of it has run, so iterators are rejected. Yields inside lambdas and local functions don't count.
     /// </summary>
-    private static bool IsIterator( IMethodSymbol method, CancellationToken cancellationToken )
+    internal static bool IsIterator( IMethodSymbol method, CancellationToken cancellationToken )
         => method.DeclaringSyntaxReferences
                  .Select( r => r.GetSyntax( cancellationToken ) )
                  .Any( body => body.DescendantNodes( n => n == body || n is not ( LocalFunctionStatementSyntax or AnonymousFunctionExpressionSyntax ) )
                                    .OfType< YieldStatementSyntax >()
                                    .Any() );
 
-    private static int ReadLevel( AttributeData attribute )
+    internal static int ReadLevel( AttributeData attribute )
         => attribute.ConstructorArguments.Length == 1 && attribute.ConstructorArguments[ 0 ].Value is int level ? level : DEFAULT_LEVEL;
 
-    private static (ReturnShape Shape, string? ResultType) ClassifyReturn( ITypeSymbol returnType )
+    internal static (ReturnShape Shape, string? ResultType) ClassifyReturn( ITypeSymbol returnType )
     {
         if ( returnType.SpecialType == SpecialType.System_Void )
             return (ReturnShape.Void, null);
@@ -148,7 +155,7 @@ internal static class MethodAnalyzer
         if ( returnType is INamedTypeSymbol { ContainingNamespace: { } ns } named
           && ns.ToDisplayString() == "System.Threading.Tasks" )
         {
-            var result = named.TypeArguments.Length == 1 ? named.TypeArguments[ 0 ].ToDisplayString( _typeFormat ) : null;
+            var result = named.TypeArguments.Length == 1 ? named.TypeArguments[ 0 ].ToDisplayString( TypeFormat ) : null;
 
             switch ( named.MetadataName )
             {
@@ -163,7 +170,7 @@ internal static class MethodAnalyzer
             }
         }
 
-        return (ReturnShape.Value, returnType.ToDisplayString( _typeFormat ));
+        return (ReturnShape.Value, returnType.ToDisplayString( TypeFormat ));
     }
 
     private static TypeModel BuildType( INamedTypeSymbol type )
@@ -205,7 +212,7 @@ internal static class MethodAnalyzer
     }
 
     /// <summary><c>OrderService.GetOrder</c>: enclosing types and method, no namespace, no type arguments.</summary>
-    private static string DisplayName( IMethodSymbol method )
+    internal static string DisplayName( IMethodSymbol method )
     {
         var parts = new List< string > { method.Name };
 
@@ -223,7 +230,7 @@ internal static class MethodAnalyzer
                                    .Select( m => m.Text )
                                    .Concat( [ "partial" ] );
 
-        var returnType = method.ReturnsVoid ? "void" : method.ReturnType.ToDisplayString( _typeFormat );
+        var returnType = method.ReturnsVoid ? "void" : method.ReturnType.ToDisplayString( TypeFormat );
         var typeParameters = method.TypeParameters.Length == 0
             ? ""
             : "<" + string.Join( ", ", method.TypeParameters.Select( p => Escape( p.Name ) ) ) + ">";
@@ -233,7 +240,7 @@ internal static class MethodAnalyzer
         return $"{string.Join( " ", modifiers )} {returnType} {Escape( method.Name )}{typeParameters}{Parenthesize( parameters )}{constraints}";
     }
 
-    private static string DeclareParameter( IMethodSymbol method, IParameterSymbol parameter )
+    internal static string DeclareParameter( IMethodSymbol method, IParameterSymbol parameter )
     {
         var prefix = "";
 
@@ -255,11 +262,11 @@ internal static class MethodAnalyzer
         if ( parameter.IsParams )
             prefix += "params ";
 
-        return prefix + parameter.Type.ToDisplayString( _typeFormat ) + " " + Escape( parameter.Name );
+        return prefix + parameter.Type.ToDisplayString( TypeFormat ) + " " + Escape( parameter.Name );
     }
 
     /// <summary>A partial implementation must repeat its definition's constraints.</summary>
-    private static string Constraints( ITypeParameterSymbol parameter )
+    internal static string Constraints( ITypeParameterSymbol parameter )
     {
         var clauses = new List< string >();
 
@@ -274,7 +281,7 @@ internal static class MethodAnalyzer
         if ( parameter.HasNotNullConstraint )
             clauses.Add( "notnull" );
 
-        clauses.AddRange( parameter.ConstraintTypes.Select( t => t.ToDisplayString( _typeFormat ) ) );
+        clauses.AddRange( parameter.ConstraintTypes.Select( t => t.ToDisplayString( TypeFormat ) ) );
 
         if ( parameter.HasConstructorConstraint )
             clauses.Add( "new()" );
@@ -343,7 +350,7 @@ internal static class MethodAnalyzer
         => type.ToDisplayString() == LOGGER_INTERFACE
         || type.AllInterfaces.Any( i => i.ToDisplayString() == LOGGER_INTERFACE );
 
-    private static IEnumerable< LoggedParameter > LoggedParameters( IMethodSymbol method )
+    internal static IEnumerable< LoggedParameter > LoggedParameters( IMethodSymbol method )
     {
         if ( HasNoLog( method ) )
             yield break;
@@ -399,10 +406,10 @@ internal static class MethodAnalyzer
         return type.AllInterfaces.Any( HasNoLog );
     }
 
-    private static string Parenthesize( string list ) => list.Length == 0 ? "()" : $"( {list} )";
+    internal static string Parenthesize( string list ) => list.Length == 0 ? "()" : $"( {list} )";
 
     /// <summary>A parameter called <c>@class</c> must be written with its <c>@</c>.</summary>
-    private static string Escape( string name )
+    internal static string Escape( string name )
         => SyntaxFacts.GetKeywordKind( name ) != SyntaxKind.None ? "@" + name : name;
 
     #endregion

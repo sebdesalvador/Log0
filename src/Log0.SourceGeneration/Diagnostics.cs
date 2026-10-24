@@ -8,8 +8,8 @@ internal static class Diagnostics
 
     public static readonly DiagnosticDescriptor MustBePartialDefinition = new(
         "LOG001",
-        "[Log] method must be a partial method without a body",
-        "[Log] method '{0}' must be declared partial, without a body. Write the body in '{0}Core' instead.",
+        "[Log] partial method must not have a body",
+        "[Log] partial method '{0}' must not have a body. Write the body in '{0}Core', or drop 'partial' to log its calls instead.",
         CATEGORY,
         DiagnosticSeverity.Error,
         isEnabledByDefault: true
@@ -37,6 +37,15 @@ internal static class Diagnostics
         "LOG004",
         "[Log] method shape is not supported",
         "[Log] cannot wrap '{0}': {1} are not supported",
+        CATEGORY,
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true
+    );
+
+    public static readonly DiagnosticDescriptor NotInterceptable = new(
+        "LOG005",
+        "[Log] method cannot be intercepted",
+        "Calls to '{0}' cannot be logged: {1}",
         CATEGORY,
         DiagnosticSeverity.Error,
         isEnabledByDefault: true
