@@ -10,7 +10,7 @@ public sealed record Order( int Id, string Customer, decimal Total );
 public sealed record CardNumber( string Value );
 
 /// <summary>
-/// Plain methods with [Log] on them: no partial, no logger field, no constructor parameter.
+/// Ordinary methods with [Log] on them: no partial, no logger field, no constructor parameter.
 /// Every call to them is redirected at compile time to a generated method that logs around the
 /// original, using the app's ILoggerFactory handed over by services.AddLog0().
 /// </summary>

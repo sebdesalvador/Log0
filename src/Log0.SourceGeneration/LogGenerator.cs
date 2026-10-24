@@ -5,9 +5,8 @@ using Microsoft.CodeAnalysis;
 namespace Log0.SourceGeneration;
 
 /// <summary>
-/// Logs <c>Start</c>, then <c>Success</c>, <c>Canceled</c> or <c>Error</c> around methods marked
-/// <c>[Log]</c>. A partial method gets a generated body that calls its <c>Core</c> implementation;
-/// a plain method keeps its body and every call to it is intercepted instead.
+/// Logs <c>Start</c>, then <c>Success</c>, <c>Canceled</c> or <c>Error</c> around every call to a
+/// method marked <c>[Log]</c>. The method keeps its body; each call to it is intercepted.
 /// </summary>
 [ Generator ]
 public sealed class LogGenerator : IIncrementalGenerator
@@ -16,43 +15,31 @@ public sealed class LogGenerator : IIncrementalGenerator
 
     public void Initialize( IncrementalGeneratorInitializationContext context )
     {
-        var results = context.SyntaxProvider.ForAttributeWithMetadataName(
+        // Problems with a method are reported once, on its declaration.
+        var problems = context.SyntaxProvider.ForAttributeWithMetadataName(
             LOG_ATTRIBUTE,
             static ( node, _ ) => node is Microsoft.CodeAnalysis.CSharp.Syntax.MethodDeclarationSyntax,
             MethodAnalyzer.Analyze
         );
 
         context.RegisterSourceOutput(
-            results.Where( static r => r.Diagnostic is not null ),
-            static ( spc, result ) => spc.ReportDiagnostic( result.Diagnostic! )
+            problems.Where( static d => d is not null ),
+            static ( spc, diagnostic ) => spc.ReportDiagnostic( diagnostic! )
         );
-
-        // One file per type, since the type's shared logger field must be declared once.
-        var models = results.Where( static r => r.Model is not null )
-                            .Select( static ( r, _ ) => r.Model! )
-                            .Collect();
-
-        context.RegisterSourceOutput( models, Emit );
 
         var calls = context.SyntaxProvider.CreateSyntaxProvider( CallAnalyzer.IsCandidate, CallAnalyzer.Analyze )
                                           .Where( static c => c is not null )
                                           .Select( static ( c, _ ) => c! )
                                           .Collect();
 
-        context.RegisterSourceOutput( calls, EmitInterceptors );
+        context.RegisterSourceOutput( calls, Emit );
     }
 
-    private static void Emit( SourceProductionContext context, ImmutableArray< MethodModel > methods )
-    {
-        foreach ( var group in methods.GroupBy( m => m.Type.Key ) )
-        {
-            var type = group.First().Type;
-            context.AddSource( $"{type.HintName}.Log0.g.cs", LogEmitter.Emit( type, group.ToArray() ) );
-        }
-    }
-
-    /// <summary>One interceptor per called method, carrying one attribute per call site.</summary>
-    private static void EmitInterceptors( SourceProductionContext context, ImmutableArray< InterceptedCall > calls )
+    /// <summary>
+    /// One file per type whose methods are called, since the type's logger field is declared
+    /// once; one interceptor per method, carrying one attribute per call site.
+    /// </summary>
+    private static void Emit( SourceProductionContext context, ImmutableArray< InterceptedCall > calls )
     {
         foreach ( var group in calls.GroupBy( c => c.Method.Type.Key ) )
         {

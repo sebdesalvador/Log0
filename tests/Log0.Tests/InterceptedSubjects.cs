@@ -1,6 +1,6 @@
 namespace Log0.Tests;
 
-// Plain [Log] methods: no partial, no Core. Calls to them are intercepted.
+// More [Log] subjects: shapes the interceptor has to get right (interfaces, overrides, extensions).
 
 public class Inventory
 {

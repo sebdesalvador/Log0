@@ -9,170 +9,108 @@ public sealed record ApiKey( string Value );
 
 public readonly record struct Money( decimal Amount, string Currency );
 
-public partial class Calculator
+public class Calculator
 {
     [ Log ]
-    public partial int Add( int a, int b );
-
-    private int AddCore( int a, int b ) => a + b;
+    public int Add( int a, int b ) => a + b;
 
     [ Log ]
-    public partial void Fail( string reason );
-
-    private void FailCore( string reason ) => throw new InvalidOperationException( reason );
+    public void Fail( string reason ) => throw new InvalidOperationException( reason );
 
     [ Log ]
-    public partial void Cancel();
-
-    private void CancelCore() => throw new OperationCanceledException();
+    public void Cancel() => throw new OperationCanceledException();
 
     [ Log( LogLevel.Debug ) ]
-    public partial int Quiet( int x );
-
-    private int QuietCore( int x ) => x;
+    public int Quiet( int x ) => x;
 
     [ Log( LogLevel.Debug ) ]
-    public partial void QuietFail();
-
-    private void QuietFailCore() => throw new InvalidOperationException( "quiet" );
+    public void QuietFail() => throw new InvalidOperationException( "quiet" );
 
     [ Log ]
-    public partial Money Convert( Money money, string currency );
-
-    private Money ConvertCore( Money money, string currency ) => money with { Currency = currency };
+    public Money Convert( Money money, string currency ) => money with { Currency = currency };
 
     [ Log ]
-    public partial int? Find( int key );
-
-    private int? FindCore( int key ) => key > 0 ? key : null;
+    public int? Find( int key ) => key > 0 ? key : null;
 
     [ Log ]
-    public static partial int Twice( int x );
-
-    private static int TwiceCore( int x ) => x * 2;
+    public static int Twice( int x ) => x * 2;
 
     [ Log ]
-    public partial T Echo< T >( T value ) where T : notnull;
-
-    private T EchoCore< T >( T value ) where T : notnull => value;
+    public T Echo< T >( T value ) where T : notnull => value;
 
     [ Log ]
-    public partial bool TryParse( string text, out int value );
-
-    private bool TryParseCore( string text, out int value ) => int.TryParse( text, out value );
+    public bool TryParse( string text, out int value ) => int.TryParse( text, out value );
 
     [ Log ]
-    public partial void Increment( ref int counter );
-
-    private void IncrementCore( ref int counter ) => counter++;
+    public void Increment( ref int counter ) => counter++;
 
     [ Log ]
-    public partial int Sum( params int[ ] values );
-
-    private int SumCore( params int[ ] values ) => values.Sum();
+    public int Sum( params int[ ] values ) => values.Sum();
 
     [ Log ]
-    public partial int Length( ReadOnlySpan< char > text, string label );
-
-    private int LengthCore( ReadOnlySpan< char > text, string label ) => text.Length;
+    public int Length( ReadOnlySpan< char > text, string label ) => text.Length;
 
     [ Log ]
-    public partial string Describe( string? text, IEnumerable< int > numbers, DateTime when );
-
-    private string DescribeCore( string? text, IEnumerable< int > numbers, DateTime when ) => text ?? "";
+    public string Describe( string? text, IEnumerable< int > numbers, DateTime when ) => text ?? "";
 }
 
-public partial class Vault
+public class Vault
 {
     [ Log ]
-    public partial bool Login( string user, [ NoLog ] string password );
-
-    private bool LoginCore( string user, string password ) => password == "secret";
+    public bool Login( string user, [ NoLog ] string password ) => password == "secret";
 
     [ Log ]
-    public partial bool Check( Credentials credentials, ApiKey key );
-
-    private bool CheckCore( Credentials credentials, ApiKey key ) => true;
+    public bool Check( Credentials credentials, ApiKey key ) => true;
 
     [ Log, NoLog ]
-    public partial void Store( string secret, int slot );
-
-    private void StoreCore( string secret, int slot ) { }
+    public void Store( string secret, int slot ) { }
 }
 
-public partial class Downloader
+public class Downloader
 {
     [ Log ]
-    public partial Task< string > Get( string url, CancellationToken cancellationToken );
-
-    private async Task< string > GetCore( string url, CancellationToken cancellationToken )
+    public async Task< string > Get( string url, CancellationToken cancellationToken )
     {
         await Task.Delay( 10, cancellationToken );
         return url.ToUpperInvariant();
     }
 
     [ Log ]
-    public partial Task Wait( Task gate );
-
-    private Task WaitCore( Task gate ) => gate;
+    public Task Wait( Task gate ) => gate;
 
     [ Log ]
-    public partial Task< int > Pending( Task< int > gate );
-
-    private Task< int > PendingCore( Task< int > gate ) => gate;
+    public Task< int > Pending( Task< int > gate ) => gate;
 
     [ Log ]
-    public partial Task Explode();
-
-    private async Task ExplodeCore()
+    public async Task Explode()
     {
         await Task.Yield();
         throw new InvalidOperationException( "async boom" );
     }
 
-    [ Log ]
-    public partial Task ThrowEarly();
-
     // Not async: the exception is thrown synchronously, before any task exists.
-    private Task ThrowEarlyCore() => throw new ArgumentException( "sync boom" );
+    [ Log ]
+    public Task ThrowEarly() => throw new ArgumentException( "sync boom" );
 
     [ Log ]
-    public partial ValueTask< int > Measure( ValueTask< int > source );
-
-    private ValueTask< int > MeasureCore( ValueTask< int > source ) => source;
+    public ValueTask< int > Measure( ValueTask< int > source ) => source;
 
     [ Log ]
-    public partial ValueTask Flush( ValueTask source );
-
-    private ValueTask FlushCore( ValueTask source ) => source;
+    public ValueTask Flush( ValueTask source ) => source;
 }
 
-public partial class InjectedLoggerService( ILogger< InjectedLoggerService > logger )
-{
-    private readonly ILogger _logger = logger;
-
-    [ Log ]
-    public partial void Run();
-
-    private void RunCore() { }
-}
-
-public partial class Repository< TEntity > where TEntity : class
+public class Repository< TEntity > where TEntity : class
 {
     [ Log ]
-    public partial TEntity? Load( int id );
-
-    private TEntity? LoadCore( int id ) => null;
+    public TEntity? Load( int id ) => null;
 }
 
-public static partial class Outer
+public static class Outer
 {
-    public partial class Inner
+    public class Inner
     {
         [ Log ]
-        public partial string Hello( string name );
-
-        private string HelloCore( string name ) => $"Hello {name}";
+        public string Hello( string name ) => $"Hello {name}";
     }
 }
 

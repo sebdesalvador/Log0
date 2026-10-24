@@ -6,44 +6,11 @@ public sealed class DiagnosticTests
 {
     #region Public Methods
 
-    [ Fact ]
-    public void LOG001_when_a_partial_method_has_a_body()
-        => AssertSingle(
-            "LOG001",
-            "public partial class C { [Log] public partial int Add( int a ); public partial int Add( int a ) => a; private int AddCore( int a ) => a; }"
-        );
-
-    [ Fact ]
-    public void LOG002_when_there_is_no_Core_implementation()
-    {
-        var diagnostic = AssertSingle( "LOG002", "public partial class C { [Log] public partial int Add( int a ); }" );
-
-        Assert.Contains( "AddCore", diagnostic.GetMessage() );
-    }
-
-    [ Fact ]
-    public void LOG003_when_an_enclosing_type_is_not_partial()
-        => AssertSingle(
-            "LOG003",
-            "public class Outer { public partial class C { [Log] public partial int Add( int a ); private int AddCore( int a ) => a; } }"
-        );
-
-    [ Theory ]
-    [ InlineData( "[Log] public partial ref int Get(); private int _x; private ref int GetCore() => ref _x;", "ref returns" ) ]
-    [ InlineData( "[Log] public partial IEnumerable<int> Get(); private IEnumerable<int> GetCore() { yield return 1; }", "iterators" ) ]
-    [ InlineData( "[Log] public partial void Go(); private async void GoCore() => await Task.Yield();", "async void" ) ]
-    public void LOG004_for_unsupported_shapes( string members, string reason )
-    {
-        var diagnostic = AssertSingle( "LOG004", $"public partial class C {{ {members} }}" );
-
-        Assert.Contains( reason, diagnostic.GetMessage() );
-    }
-
     [ Theory ]
     [ InlineData( "[Log] public ref int Get() => ref _x; private int _x;", "ref returns" ) ]
     [ InlineData( "[Log] public IEnumerable<int> Get() { yield return 1; }", "iterators" ) ]
     [ InlineData( "[Log] public async void Go() => await Task.Yield();", "async void" ) ]
-    public void LOG004_for_unsupported_plain_methods( string members, string reason )
+    public void LOG004_for_unsupported_shapes( string members, string reason )
     {
         var diagnostic = AssertSingle( "LOG004", $"public class C {{ {members} }}" );
 
@@ -64,7 +31,7 @@ public sealed class DiagnosticTests
     }
 
     [ Fact ]
-    public void Plain_methods_need_no_partial_anywhere()
+    public void Nothing_needs_to_be_partial()
     {
         var run = GeneratorHarness.Run( Wrap( "public class Outer { public class C { [Log] public int Add( int a ) => a; } }" ) );
 
@@ -76,7 +43,7 @@ public sealed class DiagnosticTests
     public void Yield_inside_a_lambda_does_not_make_an_iterator()
     {
         var run = GeneratorHarness.Run( Wrap(
-            "public partial class C { [Log] public partial Func<IEnumerable<int>> Get(); private Func<IEnumerable<int>> GetCore() { IEnumerable<int> Local() { yield return 1; } return Local; } }"
+            "public class C { [Log] public Func<IEnumerable<int>> Get() { IEnumerable<int> Local() { yield return 1; } return Local; } }"
         ) );
 
         Assert.Empty( run.GeneratorDiagnostics );

@@ -57,7 +57,7 @@ public sealed class SyncMethodTests
         var error = factory.Entries[ 1 ];
         Assert.Equal( LogLevel.Error, error.Level );
         Assert.Same( thrown, error.Exception );
-        Assert.Contains( "FailCore", thrown.StackTrace );
+        Assert.Contains( "Calculator.Fail", thrown.StackTrace );
     }
 
     [ Fact ]
@@ -133,19 +133,6 @@ public sealed class SyncMethodTests
 
         Assert.Equal( 3, new Calculator().Add( 1, 2 ) );
         Assert.Throws< InvalidOperationException >( () => new Calculator().Fail( "x" ) );
-    }
-
-    [ Fact ]
-    public void An_ILogger_field_on_the_class_is_used_instead_of_the_shared_factory()
-    {
-        var shared = new CapturingLoggerFactory();
-        var injected = new CapturingLoggerFactory();
-        using var _ = Log0Logging.Use( shared );
-
-        new InjectedLoggerService( injected.CreateLogger< InjectedLoggerService >() ).Run();
-
-        Assert.Empty( shared.Entries );
-        Assert.Equal( [ "Start InjectedLoggerService.Run", "Success InjectedLoggerService.Run" ], injected.Messages );
     }
 
     #endregion

@@ -4,13 +4,12 @@ using System.Text;
 
 namespace Log0.SourceGeneration;
 
-/// <summary>Writes the source for one type's [Log] methods.</summary>
+/// <summary>Writes the interceptors for the calls to one type's [Log] methods.</summary>
 internal static class LogEmitter
 {
     #region Constants
 
     private const string LOGGER = "global::Microsoft.Extensions.Logging.ILogger";
-    private const string NULL_LOGGER = "global::Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance";
     private const string METHOD = "global::Log0.Log0Method";
     private const string EXCEPTION = "global::System.Exception";
     private const string TASKS = "global::System.Threading.Tasks";
@@ -36,12 +35,9 @@ internal static class LogEmitter
 
         var names = new Names( Prefix( methods ) );
 
-        if ( methods.Any( m => m.LoggerExpression is null ) )
-        {
-            writer.Line( GeneratedCode() );
-            writer.Line( $"private static readonly global::Log0.Log0Logger {names.SharedLogger} = new( typeof( {type.TypeOfName} ) );" );
-            writer.Line();
-        }
+        writer.Line( GeneratedCode() );
+        writer.Line( $"private static readonly global::Log0.Log0Logger {names.SharedLogger} = new( typeof( {type.TypeOfName} ) );" );
+        writer.Line();
 
         for ( var i = 0; i < methods.Count; i++ )
         {
@@ -57,8 +53,7 @@ internal static class LogEmitter
         if ( type.Namespace is not null )
             writer.Close();
 
-        if ( methods.Any( m => m.Attributes.Length > 0 ) )
-            EmitInterceptsLocationAttribute( writer );
+        EmitInterceptsLocationAttribute( writer );
 
         return writer.ToString();
     }
@@ -97,11 +92,7 @@ internal static class LogEmitter
         writer.Line( GeneratedCode() );
         writer.Open( method.Signature );
 
-        var logger = method.LoggerExpression is null
-            ? $"{names.SharedLogger}.Logger"
-            : $"(({LOGGER}?){method.LoggerExpression}) ?? {NULL_LOGGER}";
-
-        writer.Line( $"{LOGGER} {names.Logger} = {logger};" );
+        writer.Line( $"{LOGGER} {names.Logger} = {names.SharedLogger}.Logger;" );
         writer.Line( $"{METHOD} {names.Log} = {field};" );
         writer.Line();
         EmitStart( writer, method, names );
@@ -168,7 +159,7 @@ internal static class LogEmitter
     private static void EmitVoid( Writer writer, MethodModel method, Names n )
     {
         writer.Open( "try" );
-        writer.Line( method.CoreCall + ";" );
+        writer.Line( method.Call + ";" );
         writer.Close();
         Catch( writer, n.Exception, n.Log, n.Logger );
         writer.Line();
@@ -180,7 +171,7 @@ internal static class LogEmitter
         writer.Line( $"{method.ResultType} {n.Result};" );
         writer.Line();
         writer.Open( "try" );
-        writer.Line( $"{n.Result} = {method.CoreCall};" );
+        writer.Line( $"{n.Result} = {method.Call};" );
         writer.Close();
         Catch( writer, n.Exception, n.Log, n.Logger );
         writer.Line();
@@ -206,7 +197,7 @@ internal static class LogEmitter
         writer.Line( $"{taskType} {n.Task};" );
         writer.Line();
         writer.Open( "try" );
-        writer.Line( $"{n.Task} = {method.CoreCall};" );
+        writer.Line( $"{n.Task} = {method.Call};" );
         writer.Close();
         Catch( writer, n.Exception, n.Log, n.Logger );
         writer.Line();
