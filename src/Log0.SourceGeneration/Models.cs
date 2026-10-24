@@ -13,7 +13,7 @@ internal enum ReturnShape
     ValueTaskOfT
 }
 
-/// <summary>A type declaration the generated method must be nested in, outermost first.</summary>
+/// <summary>A type declaration the generated methods are nested in, outermost first.</summary>
 internal sealed record ContainingType( string Declaration );
 
 /// <summary>A parameter whose value goes into the <c>Start</c> entry.</summary>
@@ -21,7 +21,7 @@ internal sealed record ContainingType( string Declaration );
 /// <param name="Expression">What the generated code passes: the parameter, or the redaction constant.</param>
 internal sealed record LoggedParameter( string Name, string Expression );
 
-/// <summary>Everything the emitter needs for one type holding [Log] methods.</summary>
+/// <summary>Everything the emitter needs for the interceptor class of one type holding [Log] methods.</summary>
 /// <param name="Key">Identifies the type across methods, for grouping.</param>
 /// <param name="HintName">File name stem for the generated source.</param>
 /// <param name="Namespace">The namespace, or null for the global namespace.</param>
@@ -35,40 +35,27 @@ internal sealed record TypeModel(
     string TypeOfName
 );
 
-/// <summary>Everything the emitter needs for one [Log] method.</summary>
-/// <param name="Signature">The implementing declaration's header, without body.</param>
-/// <param name="CoreCall">The call to the user's implementation, arguments included.</param>
+/// <summary>Everything the emitter needs for the interceptor of one [Log] method.</summary>
+/// <param name="Signature">The interceptor's header, without body.</param>
+/// <param name="Call">The call to the original method, arguments included.</param>
 /// <param name="ResultType">The returned type, or for a task its result type.</param>
-/// <param name="LoggerExpression">An expression for the class's own logger, or null to use the shared factory.</param>
 /// <param name="ReservedNames">Parameter and type parameter names, which generated identifiers must not reuse.</param>
-/// <param name="Attributes">Attributes written above the method: the call sites, for an interceptor.</param>
+/// <param name="Attributes">The <c>[InterceptsLocation]</c> attributes, one per call site.</param>
 internal sealed record MethodModel(
     TypeModel Type,
     string Name,
     string DisplayName,
     int Level,
     string Signature,
-    string CoreCall,
+    string Call,
     ReturnShape Shape,
     string? ResultType,
-    string? LoggerExpression,
     EquatableArray< LoggedParameter > Parameters,
     EquatableArray< string > ReservedNames,
     EquatableArray< string > Attributes
 );
 
-/// <summary>One call to a plain [Log] method, and the interceptor that replaces it.</summary>
+/// <summary>One call to a [Log] method, and the interceptor that replaces it.</summary>
 /// <param name="Method">The interceptor; identical for every call to the same method.</param>
 /// <param name="Location">The <c>[InterceptsLocation]</c> attribute pointing at the call.</param>
 internal sealed record InterceptedCall( MethodModel Method, string Location );
-
-/// <summary>A method model, or the reason there isn't one.</summary>
-internal sealed record Result( MethodModel? Model, Diagnostic? Diagnostic )
-{
-    /// <summary>Nothing to generate and nothing wrong: the method's calls are intercepted instead.</summary>
-    public static Result None { get; } = new( null, null );
-
-    public static Result Success( MethodModel model ) => new( model, null );
-
-    public static Result Failure( Diagnostic diagnostic ) => new( null, diagnostic );
-}

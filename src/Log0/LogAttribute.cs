@@ -8,19 +8,11 @@ namespace Log0;
 /// entry when <see cref="LogLevel.Debug"/> or lower is enabled.
 /// </summary>
 /// <remarks>
-/// On a plain method, every direct call to it in the project is intercepted at compile time and
-/// logged; on an interface method, so is every call through the interface:
+/// Every direct call to the method in the project is intercepted at compile time and logged; on
+/// an interface method, so is every call through the interface. The method itself is unchanged:
 /// <code>
 /// [Log]
 /// public Task&lt;Order&gt; GetOrder( int id ) =&gt; _repository.Find( id );
-/// </code>
-/// To log every call however it is made, declare the method as a partial definition and write
-/// its body in a method with the same signature and a <c>Core</c> suffix:
-/// <code>
-/// [Log]
-/// public partial Task&lt;Order&gt; GetOrder( int id );
-///
-/// private async Task&lt;Order&gt; GetOrderCore( int id ) =&gt; await _repository.Find( id );
 /// </code>
 /// </remarks>
 [ AttributeUsage( AttributeTargets.Method, Inherited = false ) ]

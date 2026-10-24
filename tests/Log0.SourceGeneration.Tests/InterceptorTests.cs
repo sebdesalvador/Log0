@@ -4,8 +4,8 @@ using Xunit;
 namespace Log0.SourceGeneration.Tests;
 
 /// <summary>
-/// Plain [Log] methods: no partial, no Core. Every call is redirected to a generated
-/// interceptor, which must compile without a single warning whatever the signature.
+/// Every call to a [Log] method is redirected to a generated interceptor, which must compile
+/// without a single warning whatever the signature.
 /// </summary>
 public sealed class InterceptorTests
 {
@@ -154,24 +154,6 @@ public sealed class InterceptorTests
     }
 
     [ Fact ]
-    public void Partial_methods_are_not_intercepted()
-    {
-        var run = GeneratorHarness.Run( DiagnosticTests.Wrap(
-            """
-            public partial class C
-            {
-                [Log] public partial int Add( int a );
-                private int AddCore( int a ) => a;
-                public int Use() => Add( 1 );
-            }
-            """
-        ) );
-
-        Assert.True( run.CompilerDiagnostics.Count == 0, run.Describe() );
-        Assert.DoesNotContain( "InterceptsLocation", string.Join( "\n", run.Generated ) );
-    }
-
-    [ Fact ]
     public void Logs_under_the_declaring_types_category_with_masked_parameters()
     {
         var run = AssertIntercepted(
@@ -213,6 +195,39 @@ public sealed class InterceptorTests
 
         var generated = Assert.Single( run.Generated );
         Assert.Single( generated.Split( '\n' ), l => l.Contains( "internal static int Get(" ) );
+    }
+
+    [ Fact ]
+    public void Parameters_named_like_generated_identifiers_do_not_collide()
+        => AssertIntercepted(
+            """
+            public class C
+            {
+                [Log] public int Sync( int __logger, int __log, int __result, int __exception, int __log0Logger, int __log0_Sync_0 ) => __logger;
+                [Log] public Task<int> Async( int __task, int __log0_task, int __Log0Await ) => Task.FromResult( __task );
+                [Log] public ValueTask<__log0> Generic<__log0>( __log0 __log0_result ) => new( __log0_result );
+                public void Use() { Sync( 1, 2, 3, 4, 5, 6 ); Async( 1, 2, 3 ); Generic( 1 ); }
+            }
+            """,
+            3
+        );
+
+    [ Fact ]
+    public void Global_namespace_types_are_supported()
+    {
+        var run = GeneratorHarness.Run(
+            """
+            using Log0;
+            public class C
+            {
+                [Log] public void Go() { }
+                public void Use() => Go();
+            }
+            """
+        );
+
+        Assert.Empty( run.CompilerDiagnostics );
+        Assert.Contains( "namespace Log0.Generated\n", Assert.Single( run.Generated ) );
     }
 
     #endregion

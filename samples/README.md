@@ -1,6 +1,6 @@
 # Log0 sample
 
-A console app with a host and an `OrderService` whose plain methods are marked `[Log]`, with no
+A console app with a host and an `OrderService` whose methods are marked `[Log]`, with no
 other code. It shows:
 
 | Call | What you see |

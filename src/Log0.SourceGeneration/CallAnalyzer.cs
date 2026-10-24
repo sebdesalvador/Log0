@@ -8,15 +8,14 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 namespace Log0.SourceGeneration;
 
 /// <summary>
-/// Turns a call to a plain (non-partial) <c>[Log]</c> method into an interceptor: a generated
-/// method the compiler calls instead, which logs around a call to the original.
+/// Turns a call to a <c>[Log]</c> method into an interceptor: a generated method the compiler
+/// calls instead, which logs around a call to the original.
 /// </summary>
 internal static class CallAnalyzer
 {
     #region Constants
 
     private const string LOG_ATTRIBUTE = "Log0.LogAttribute";
-    private const string GENERATED_CODE_ATTRIBUTE = "System.CodeDom.Compiler.GeneratedCodeAttribute";
 
     /// <summary>
     /// The namespace interceptors are declared in. The compiler only accepts interceptors from
@@ -33,7 +32,7 @@ internal static class CallAnalyzer
     /// <summary>Cheap syntactic filter: anything that looks like a call.</summary>
     public static bool IsCandidate( SyntaxNode node, CancellationToken _ ) => node is InvocationExpressionSyntax;
 
-    /// <summary>The interceptor for this call, or null when it doesn't target a plain [Log] method.</summary>
+    /// <summary>The interceptor for this call, or null when it doesn't target a [Log] method.</summary>
     public static InterceptedCall? Analyze( GeneratorSyntaxContext context, CancellationToken cancellationToken )
     {
         var invocation = ( InvocationExpressionSyntax )context.Node;
@@ -45,7 +44,7 @@ internal static class CallAnalyzer
         var method = ( called.ReducedFrom ?? called ).OriginalDefinition;
         var attribute = FindAttribute( method );
 
-        if ( attribute is null || IsWrappedAlready( method ) )
+        if ( attribute is null )
             return null;
 
         // base.M() must stay a non-virtual call; the interceptor could only make a virtual one.
@@ -80,12 +79,12 @@ internal static class CallAnalyzer
             return new Problem( Diagnostics.NotInterceptable, method.Name, "static abstract and static virtual members are called through a type parameter" );
 
         if ( method.ContainingType.IsValueType )
-            return new Problem( Diagnostics.NotInterceptable, method.Name, "struct methods are not supported yet; use the partial form" );
+            return new Problem( Diagnostics.NotInterceptable, method.Name, "struct methods are not supported" );
 
         for ( ISymbol symbol = method; symbol is INamedTypeSymbol or IMethodSymbol; symbol = symbol.ContainingSymbol )
         {
             if ( symbol.DeclaredAccessibility is not ( Accessibility.Public or Accessibility.Internal or Accessibility.ProtectedOrInternal ) )
-                return new Problem( Diagnostics.NotInterceptable, method.Name, $"'{symbol.Name}' is not visible to generated code; make it internal or public, or use the partial form" );
+                return new Problem( Diagnostics.NotInterceptable, method.Name, $"'{symbol.Name}' is not visible to generated code; make it internal or public" );
         }
 
         return null;
@@ -112,13 +111,6 @@ internal static class CallAnalyzer
         return null;
     }
 
-    /// <summary>The implementation of a partial [Log] method, seen from another assembly, is already logged.</summary>
-    private static bool IsWrappedAlready( IMethodSymbol method )
-        => method.IsPartialDefinition
-        || method.PartialDefinitionPart is not null
-        || method.GetAttributes().Any( a => a.AttributeClass?.ToDisplayString() == GENERATED_CODE_ATTRIBUTE
-                                         && a.ConstructorArguments.FirstOrDefault().Value is "Log0" );
-
     private static MethodModel BuildInterceptor( IMethodSymbol method, AttributeData attribute )
     {
         var (shape, resultType) = MethodAnalyzer.ClassifyReturn( method.ReturnType );
@@ -141,10 +133,9 @@ internal static class CallAnalyzer
             DisplayName: MethodAnalyzer.DisplayName( method ),
             Level: MethodAnalyzer.ReadLevel( attribute ),
             Signature: BuildSignature( method, typeParameters, receiver ),
-            CoreCall: BuildCall( method, receiver ),
+            Call: BuildCall( method, receiver ),
             Shape: shape,
             ResultType: resultType,
-            LoggerExpression: null,
             Parameters: MethodAnalyzer.LoggedParameters( method ).ToArray(),
             ReservedNames: reserved,
             Attributes: new string[ 0 ]
