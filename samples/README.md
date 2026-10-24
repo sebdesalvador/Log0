@@ -1,6 +1,7 @@
 # Log0 sample
 
-A console app with a host and an `OrderService` whose methods are marked `[Log]`. It shows:
+A console app with a host and an `OrderService` whose plain methods are marked `[Log]`, with no
+other code. It shows:
 
 | Call | What you see |
 |---|---|
@@ -13,6 +14,12 @@ A console app with a host and an `OrderService` whose methods are marked `[Log]`
 ```bash
 dotnet run --project samples/Log0.Sample              # Information
 dotnet run --project samples/Log0.Sample -- --debug   # Debug: adds parameter values and Debug methods
+```
+
+It also publishes as a Native AoT binary, with no trimming or AoT warnings:
+
+```bash
+dotnet publish samples/Log0.Sample -c Release
 ```
 
 Levels come from [`appsettings.json`](Log0.Sample/appsettings.json), exactly as for any `ILogger<T>`.

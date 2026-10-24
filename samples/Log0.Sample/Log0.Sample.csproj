@@ -1,7 +1,12 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
+    <!-- What the package imports for its consumers: lets the generated interceptors in. -->
+    <Import Project="..\..\src\Log0\build\Log0.props" />
+
     <PropertyGroup>
         <OutputType>Exe</OutputType>
+        <!-- Proves the point: no reflection, so `dotnet publish` produces a Native AoT binary with no warnings. -->
+        <PublishAot>true</PublishAot>
     </PropertyGroup>
 
     <ItemGroup>

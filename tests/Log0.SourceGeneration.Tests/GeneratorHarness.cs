@@ -19,6 +19,10 @@ internal static class GeneratorHarness
         MetadataReference.CreateFromFile( typeof( Microsoft.Extensions.Logging.ILogger ).Assembly.Location )
     ];
 
+    /// <summary>What the package's props set: interceptors are only accepted from this namespace.</summary>
+    private static readonly CSharpParseOptions _parseOptions = new CSharpParseOptions( LanguageVersion.Preview )
+        .WithFeatures( [ new KeyValuePair< string, string >( "InterceptorsNamespaces", "Log0.Generated" ) ] );
+
     #endregion
 
     #region Public Methods
@@ -31,13 +35,13 @@ internal static class GeneratorHarness
     {
         var compilation = CSharpCompilation.Create(
             "Snippet",
-            [ CSharpSyntaxTree.ParseText( source, new CSharpParseOptions( LanguageVersion.Preview ) ) ],
+            [ CSharpSyntaxTree.ParseText( source, _parseOptions, path: "Snippet.cs" ) ],
             _references,
             new CSharpCompilationOptions( OutputKind.DynamicallyLinkedLibrary, nullableContextOptions: nullable, allowUnsafe: true )
         );
 
         GeneratorDriver driver = CSharpGeneratorDriver.Create( new LogGenerator() )
-                                                      .WithUpdatedParseOptions( new CSharpParseOptions( LanguageVersion.Preview ) );
+                                                      .WithUpdatedParseOptions( _parseOptions );
         driver = driver.RunGeneratorsAndUpdateCompilation( compilation, out var output, out var generatorDiagnostics );
 
         var compilerDiagnostics = output.GetDiagnostics()

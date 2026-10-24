@@ -18,7 +18,9 @@ Tests use xUnit 2. Generated code for the runtime tests lands in `tests/Log0.Tes
 
 ## Architecture
 
-A consumer writes `[Log] public partial T M(...)` plus a `MCore(...)` with the same signature; the generator implements `M` as: log Start → call `MCore` → log Success, or Canceled/Error from an exception filter.
+Two forms, same log entries:
+- **Plain** `[Log] public T M(...) { ... }` (or on an interface method): every direct call in the consuming project is redirected by a C# interceptor to a generated method that logs Start → calls `M` → logs Success, or Canceled/Error from an exception filter.
+- **Partial** `[Log] public partial T M(...)` plus a `MCore(...)` with the same signature: the generator implements `M` itself, so calls through interfaces, delegates, reflection and other assemblies are logged too.
 
 - **src/Log0** (`netstandard2.0;net8.0`, the only package): `LogAttribute`, `NoLogAttribute`, and the runtime the generated code calls:
   - `Log0Method`: one per generated method (static field). Owns levels, event ids (1 Start, 2 Success, 3 Canceled, 4 Error), parameter keys and the `Failed` exception filter (always returns false).
@@ -29,8 +31,9 @@ A consumer writes `[Log] public partial T M(...)` plus a `MCore(...)` with the s
 - **src/Log0.SourceGeneration** (`netstandard2.0`, not packable): `LogGenerator` (`ForAttributeWithMetadataName` on `Log0.LogAttribute`, results collected and grouped into one file per type) → `MethodAnalyzer` (symbol → `MethodModel` or diagnostic) → `LogEmitter` (source text).
   - The implementing signature is rebuilt from symbols with fully qualified names (no usings needed), modifiers copied from the definition's tokens, constraints repeated (required for partial implementations), parameter attributes and defaults dropped.
   - Async shapes (`Task`, `Task<T>`, `ValueTask`, `ValueTask<T>`) call `Core` synchronously (sync throws stay sync), fast-path already-successful tasks, otherwise await in a static local function. ValueTasks are read once and re-wrapped.
+  - Plain form: `CallAnalyzer` runs on every `InvocationExpressionSyntax`, keeps calls bound to a `[Log]` method (or one it overrides) that isn't partial, and builds one interceptor `MethodModel` per method (`Attributes` = one `[InterceptsLocation]` per call site). Interceptors live in `internal static class <Type>_Log0Interceptors` under `Log0.Generated.<namespace>`; generic over the containing types' then the method's type parameters. `base.M()` calls are skipped. `src/Log0/build/Log0.props` (packed to `build/` and `buildTransitive/`) adds `Log0.Generated` to `InterceptorsNamespaces`; the repo's own test and sample projects import it by hand.
   - Logger resolution: an `ILogger`-typed field/property on the type or a non-private one on a base type (static methods only accept static members), else the shared `__log0Logger` field.
-  - Diagnostics `LOG001`–`LOG004` in `Diagnostics.cs`; new rules must also go in `AnalyzerReleases.Unshipped.md` (enforced) and the README table.
+  - Diagnostics `LOG001`–`LOG005` in `Diagnostics.cs`; new rules must also go in `AnalyzerReleases.Unshipped.md` (enforced) and the README table.
   - Models must stay value-equatable for incremental caching; use `EquatableArray<T>`.
 
 ## Tests

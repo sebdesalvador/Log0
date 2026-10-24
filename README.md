@@ -11,9 +11,7 @@ logging around it.
 
 ```csharp
 [Log]
-public partial Task<Order> GetOrder(int id, CancellationToken ct);
-
-private async Task<Order> GetOrderCore(int id, CancellationToken ct) => await _db.Find(id, ct);
+public async Task<Order> GetOrder(int id, CancellationToken ct) => await _db.Find(id, ct);
 ```
 
 ```
@@ -21,8 +19,9 @@ info: Shop.OrderService[1] Start OrderService.GetOrder
 info: Shop.OrderService[2] Success OrderService.GetOrder
 ```
 
-It works at compile time, with no proxies, no reflection and no IL weaving. The generated code
-is plain C# that you can read and step through in the debugger.
+It works at compile time, with no proxies, no reflection and no IL weaving, so it is safe for
+trimming and Native AoT. The generated code is plain C# that you can read and step through in the
+debugger.
 
 ## Install
 
@@ -40,22 +39,27 @@ The package contains the attributes, a small runtime and the source generator.
 builder.Services.AddLog0();
 ```
 
-**2. Mark a method.** Declare it `partial` without a body, and write the body in a method with the
-same signature and a `Core` suffix:
+**2. Mark a method.** That's all:
 
 ```csharp
 using Log0;
 
-public partial class OrderService(IOrderRepository repository)
+public class OrderService(IOrderRepository repository)
 {
     [Log]
-    public partial Task<Order> GetOrder(int id, CancellationToken ct);
-
-    private Task<Order> GetOrderCore(int id, CancellationToken ct) => repository.Find(id, ct);
+    public Task<Order> GetOrder(int id, CancellationToken ct) => repository.Find(id, ct);
 }
 ```
 
-You don't need a constructor parameter, logger field or `ILogger<T>`. The class must be `partial`.
+You don't need `partial`, a constructor parameter, a logger field or `ILogger<T>`. The method must
+be `internal` or `public`.
+
+Every call to `GetOrder` in your project is redirected at compile time to a generated method that
+logs and then calls the original. This uses C#
+[interceptors](https://learn.microsoft.com/dotnet/csharp/whats-new/csharp-12#interceptors), which
+the package switches on for you. [Which calls are logged](#which-calls-are-logged) explains what
+that covers, and the [partial form](#the-partial-form-every-call-everywhere) is there for what it
+doesn't.
 
 ## What gets logged
 
@@ -77,6 +81,49 @@ You don't need a constructor parameter, logger field or `ILogger<T>`. The class 
 - **The logs are structured.** Each entry has a `Method` property (`OrderService.GetOrder`) and
   an `{OriginalFormat}` template, and appears under the class's category (`Shop.OrderService`,
   the same as `ILogger<OrderService>`). Filters in `appsettings.json` work as usual.
+
+## Which calls are logged
+
+The interceptor replaces each direct call written in a project that references Log0. That covers:
+
+- Calls from anywhere in the project, including from inside the class itself.
+- Instance, static, extension, generic and `virtual` methods. A virtual call still dispatches to the
+  override, and is logged under the method it binds to. `base.Get()` is never intercepted.
+- **Calls through an interface, when the interface method has `[Log]`.** Put the attribute on
+  `IOrderService.GetOrder` and every `orderService.GetOrder(…)` through the interface is logged,
+  whichever class implements it. This is what to use for services resolved from dependency
+  injection.
+
+It does not cover:
+
+- Calls through an interface whose method has no `[Log]`, even if the implementing method does,
+  and the reverse: direct calls on the class when only the interface method has `[Log]`. Put it
+  on both to log both.
+- Calls compiled in an assembly that doesn't reference Log0, calls through delegates or method
+  groups (`Func<int, Order> f = service.GetOrder;`) and calls through reflection.
+- `private` and `protected` methods, and methods on structs. These are reported as `LOG005`; use
+  the partial form.
+
+## The partial form: every call, everywhere
+
+When a method must be logged however it is called, declare it `partial` without a body and write
+the body in a method with the same signature and a `Core` suffix. The generator then writes the
+method itself, so calls through any interface, from other assemblies, through delegates and
+through reflection are all logged. The class must be `partial`.
+
+```csharp
+public partial class OrderService(IOrderRepository repository)
+{
+    [Log]
+    public partial Task<Order> GetOrder(int id, CancellationToken ct);
+
+    private Task<Order> GetOrderCore(int id, CancellationToken ct) => repository.Find(id, ct);
+}
+```
+
+The partial form also works for `private` methods, structs, and classes with their own `ILogger`
+(see [Where the logger comes from](#where-the-logger-comes-from)). Both forms produce exactly the
+same log entries.
 
 ## Log levels
 
@@ -113,7 +160,7 @@ dbug: Shop.OrderService[1] Start OrderService.GetOrder(id: 42)
 ```csharp
 // On a parameter: logged as ***
 [Log]
-public partial Task<Token> Login(string user, [NoLog] string password);
+public Task<Token> Login(string user, [NoLog] string password) => …;
 
 // On a type: every parameter of that type, in every method, is logged as ***
 [NoLog]
@@ -121,7 +168,7 @@ public sealed record CardNumber(string Value);
 
 // On a method: Start/Success/Canceled/Error are still written, but no parameter ever is
 [Log, NoLog]
-public partial void Rotate(string masterKey, string newKey);
+public void Rotate(string masterKey, string newKey) { … }
 ```
 
 ```
@@ -135,10 +182,10 @@ Start AuthService.Login(user: ada, password: ***)
 
 ## Where the logger comes from
 
-1. **An `ILogger` field or property on the class**, including a non-private one on a base class.
-   If the class already has one, Log0 uses it, so a logger injected per instance (for example a
-   test double) receives the entries.
-2. **Otherwise, the app's `ILoggerFactory`.** `AddLog0()` hands it to Log0 when the host starts,
+1. **With the partial form, an `ILogger` field or property on the class**, including a
+   non-private one on a base class. If the class already has one, Log0 uses it, so a logger
+   injected per instance (for example a test double) receives the entries.
+2. **Otherwise, the app's `ILoggerFactory`.** This is always the case for plain `[Log]` methods. `AddLog0()` hands it to Log0 when the host starts,
    and each class gets a logger for its own category, created on first use.
 
 Before the host starts, or in an app without a host, logging does nothing. To start earlier, or
@@ -171,7 +218,27 @@ public async Task Logs_the_lookup()
 
 ## What is generated
 
-For the `GetOrder` example above, abridged:
+For a plain method, one interceptor per method, with one attribute per call site. Abridged:
+
+```csharp
+namespace Log0.Generated.Shop
+{
+    internal static class OrderService_Log0Interceptors
+    {
+        private static readonly Log0Logger __log0Logger = new(typeof(global::Shop.OrderService));
+        private static readonly Log0Method __log0_GetOrder_0 = new("OrderService.GetOrder", LogLevel.Information, "id");
+
+        [InterceptsLocation(1, "8cz/1REh0X1A1uPqr5frNAMCAABQcm9ncmFtLmNz")]   // one per call site:
+        [InterceptsLocation(1, "8cz/1REh0X1A1uPqr5frNFICAABQcm9ncmFtLmNz")]   // file checksum and position
+        internal static Task<Order> GetOrder(this global::Shop.OrderService __log0_this, int id, CancellationToken ct)
+        {
+            // the same body as below, calling __log0_this.GetOrder(id, ct)
+        }
+    }
+}
+```
+
+For the partial form, the method itself, abridged:
 
 ```csharp
 private static readonly Log0Logger __log0Logger = new(typeof(OrderService));
@@ -202,11 +269,13 @@ To see the real output, build with `-p:EmitCompilerGeneratedFiles=true` and look
 ## Supported methods
 
 Log0 supports the following. Each case is covered by a test that checks the generated code
-compiles without warnings.
+compiles without warnings. Unless noted, this holds for both forms.
 
 - Instance and static methods, extension methods, and `virtual` or `override` methods.
+- Interface methods (plain form): calls through the interface are logged.
 - Generic methods with any constraints, and methods on generic types.
-- Classes, structs, records, `record struct`s, `ref struct`s and nested types.
+- Classes, records and nested types. Structs, `record struct`s and `ref struct`s with the partial
+  form only.
 - `ref`, `in`, `ref readonly`, `out`, `params` and `scoped` parameters.
 - Any nullable context, and any parameter names, including ones that look like the generated identifiers.
 
@@ -214,25 +283,31 @@ Not supported, reported as compile errors:
 
 | Rule | Error |
 |---|---|
-| `LOG001` | `[Log]` is on a method that isn't a bodiless `partial` declaration |
-| `LOG002` | There is no `…Core` method with the same parameters |
-| `LOG003` | A type enclosing the method isn't `partial` |
+| `LOG001` | `[Log]` is on a `partial` method that has a body |
+| `LOG002` | There is no `…Core` method with the same parameters (partial form) |
+| `LOG003` | A type enclosing the method isn't `partial` (partial form) |
 | `LOG004` | Ref returns, iterators (`yield`), or an `async void` implementation |
+| `LOG005` | Calls can't be intercepted: the method is `private` or `protected`, is on a struct, or is `static abstract` |
 
-## Why the `Core` method?
+The generator needs the .NET 9.0.300 SDK (Roslyn 4.14) or later, which also supports the
+interceptors that plain `[Log]` methods use.
 
-A source generator can add code, but it can't change code you wrote. So Log0 splits each method
-into a public `partial` declaration that it implements and a `Core` method you implement. This
-wraps the method itself, so every call is logged: calls through an interface, through dependency
-injection, from other assemblies and through reflection.
+## Why two forms?
 
-Interceptors don't have this split, but they only rewrite direct calls within the same project.
-Calls through an `IOrderService`, which covers most service code, would be silently missed.
+A source generator can add code, but it can't change code you wrote. Log0 gets around that in
+two ways:
+
+- **Plain methods** keep your code as it is, and rewrite the calls to it. Nothing to write, but
+  only direct calls in projects that use Log0 are seen.
+- **The partial form** splits the method into a declaration that Log0 implements and a `Core`
+  method that you implement. One extra method to write, but the method itself is wrapped, so no
+  call can get past it.
 
 ## Sample
 
 [`samples/Log0.Sample`](samples/Log0.Sample) is a console app with a host that logs success,
-error, cancellation and masked values:
+error, cancellation and masked values, with plain `[Log]` methods. It also publishes as Native
+AoT (`dotnet publish samples/Log0.Sample -c Release`):
 
 ```bash
 dotnet run --project samples/Log0.Sample              # Information

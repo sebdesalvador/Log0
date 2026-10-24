@@ -41,6 +41,7 @@ internal sealed record TypeModel(
 /// <param name="ResultType">The returned type, or for a task its result type.</param>
 /// <param name="LoggerExpression">An expression for the class's own logger, or null to use the shared factory.</param>
 /// <param name="ReservedNames">Parameter and type parameter names, which generated identifiers must not reuse.</param>
+/// <param name="Attributes">Attributes written above the method: the call sites, for an interceptor.</param>
 internal sealed record MethodModel(
     TypeModel Type,
     string Name,
@@ -52,12 +53,21 @@ internal sealed record MethodModel(
     string? ResultType,
     string? LoggerExpression,
     EquatableArray< LoggedParameter > Parameters,
-    EquatableArray< string > ReservedNames
+    EquatableArray< string > ReservedNames,
+    EquatableArray< string > Attributes
 );
+
+/// <summary>One call to a plain [Log] method, and the interceptor that replaces it.</summary>
+/// <param name="Method">The interceptor; identical for every call to the same method.</param>
+/// <param name="Location">The <c>[InterceptsLocation]</c> attribute pointing at the call.</param>
+internal sealed record InterceptedCall( MethodModel Method, string Location );
 
 /// <summary>A method model, or the reason there isn't one.</summary>
 internal sealed record Result( MethodModel? Model, Diagnostic? Diagnostic )
 {
+    /// <summary>Nothing to generate and nothing wrong: the method's calls are intercepted instead.</summary>
+    public static Result None { get; } = new( null, null );
+
     public static Result Success( MethodModel model ) => new( model, null );
 
     public static Result Failure( Diagnostic diagnostic ) => new( null, diagnostic );

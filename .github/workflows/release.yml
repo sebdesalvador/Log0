@@ -61,6 +61,11 @@ jobs:
           run: dotnet test Log0.slnx --configuration Release
         - name: Run the sample
           run: dotnet run --project samples/Log0.Sample --configuration Release -- --debug
+        # The sample sets PublishAot: any reflection the generated code needed would show up here
+        - name: Publish and run the sample as Native AoT
+          run: |
+            dotnet publish samples/Log0.Sample --configuration Release --output ${{ github.workspace }}/aot -p:TreatWarningsAsErrors=true
+            ${{ github.workspace }}/aot/Log0.Sample --debug
 
   deploy:
     # Publish only when creating a GitHub Release

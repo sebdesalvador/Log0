@@ -2,7 +2,7 @@
 
     <PropertyGroup>
         <PackageId>Log0</PackageId>
-        <Description>Zero-boilerplate method logging. Mark a partial method with [Log] and a source generator writes the Start, Success, Canceled and Error logs around it, with parameter values at Debug level. No proxies, no reflection.</Description>
+        <Description>Zero-boilerplate method logging. Mark a method with [Log] and a source generator writes the Start, Success, Canceled and Error logs around every call to it, with parameter values at Debug level. No proxies, no reflection, Native AoT compatible.</Description>
         <TargetFrameworks>netstandard2.0;net8.0</TargetFrameworks>
         <GenerateDocumentationFile>true</GenerateDocumentationFile>
         <IncludeSymbols>true</IncludeSymbols>
@@ -31,6 +31,7 @@
 
     <ItemGroup>
         <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+        <None Include="build\Log0.props" Pack="true" PackagePath="build;buildTransitive" />
         <None Include="..\..\icon.png" Pack="true" PackagePath="\" Condition="Exists('..\..\icon.png')" />
     </ItemGroup>
 

@@ -5,8 +5,9 @@ using Microsoft.CodeAnalysis;
 namespace Log0.SourceGeneration;
 
 /// <summary>
-/// Writes the body of every partial method marked <c>[Log]</c>: log <c>Start</c>, call the
-/// <c>Core</c> implementation, then log <c>Success</c>, <c>Canceled</c> or <c>Error</c>.
+/// Logs <c>Start</c>, then <c>Success</c>, <c>Canceled</c> or <c>Error</c> around methods marked
+/// <c>[Log]</c>. A partial method gets a generated body that calls its <c>Core</c> implementation;
+/// a plain method keeps its body and every call to it is intercepted instead.
 /// </summary>
 [ Generator ]
 public sealed class LogGenerator : IIncrementalGenerator
@@ -32,6 +33,13 @@ public sealed class LogGenerator : IIncrementalGenerator
                             .Collect();
 
         context.RegisterSourceOutput( models, Emit );
+
+        var calls = context.SyntaxProvider.CreateSyntaxProvider( CallAnalyzer.IsCandidate, CallAnalyzer.Analyze )
+                                          .Where( static c => c is not null )
+                                          .Select( static ( c, _ ) => c! )
+                                          .Collect();
+
+        context.RegisterSourceOutput( calls, EmitInterceptors );
     }
 
     private static void Emit( SourceProductionContext context, ImmutableArray< MethodModel > methods )
@@ -40,6 +48,20 @@ public sealed class LogGenerator : IIncrementalGenerator
         {
             var type = group.First().Type;
             context.AddSource( $"{type.HintName}.Log0.g.cs", LogEmitter.Emit( type, group.ToArray() ) );
+        }
+    }
+
+    /// <summary>One interceptor per called method, carrying one attribute per call site.</summary>
+    private static void EmitInterceptors( SourceProductionContext context, ImmutableArray< InterceptedCall > calls )
+    {
+        foreach ( var group in calls.GroupBy( c => c.Method.Type.Key ) )
+        {
+            var interceptors = group.GroupBy( c => c.Method )
+                                    .Select( m => m.Key with { Attributes = m.Select( c => c.Location ).Distinct().ToArray() } )
+                                    .ToArray();
+
+            var type = interceptors[ 0 ].Type;
+            context.AddSource( $"{type.HintName}.Log0.g.cs", LogEmitter.Emit( type, interceptors ) );
         }
     }
 }
